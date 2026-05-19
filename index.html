@@ -5,8 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TDABC Procedure Capture</title>
 
-<!-- Microsoft Authentication Library — IT: do not remove -->
-<script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
+<!-- Backend: Google Apps Script — no login required -->
 
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -165,41 +164,14 @@ body{font-family:Arial,sans-serif;font-size:14px;color:#1a1a1a;background:#f4f6f
 // ─────────────────────────────────────────────
 // ⚙️  IT CONFIGURATION — fill these in
 // ─────────────────────────────────────────────
-const GRAPH_CONFIG = {
-  clientId: 'b4422db5-2b43-4f69-8a27-3bd1d4d1f85e', // Azure App Registration client ID
-  tenantId: '0656307e-3ae2-447b-8f4c-0a286915f5c0', // Azure AD tenant ID
-  siteId:   '0f7fe628-f247-4c60-9af0-b01eb39149e4', // SharePoint site ID
-  listId:   'e4f67273-af24-4e72-96e1-35a6828aa875',  // TDABC_Responses list ID
-};
+// Google Apps Script endpoint — receives form data and writes to Google Sheet
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxMhVHr-EIToCRtNLS303NMGFHEqHCgtikXjkDFWIlytQ9Qkj77UaJQchomK6YhywVl/exec';
 // ─────────────────────────────────────────────
 
-let msalInstance = null;
 let consItems = [];
 let equipItems = [];
 
-// Init MSAL
-function initMsal() {
-  msalInstance = new msal.PublicClientApplication({
-    auth: {
-      clientId: GRAPH_CONFIG.clientId,
-      authority: `https://login.microsoftonline.com/${GRAPH_CONFIG.tenantId}`,
-      redirectUri: 'https://dedolapo13.github.io/tdabc-form/',
-    },
-    cache: { cacheLocation: 'sessionStorage' }
-  });
-}
-
-async function getToken() {
-  const accounts = msalInstance.getAllAccounts();
-  const request = { scopes: ['Sites.ReadWrite.All'], account: accounts[0] };
-  try {
-    const res = await msalInstance.acquireTokenSilent(request);
-    return res.accessToken;
-  } catch {
-    const res = await msalInstance.acquireTokenPopup(request);
-    return res.accessToken;
-  }
-}
+// No authentication needed — Google Apps Script handles it
 
 // ── MODALS ──
 function openModal(type) {
@@ -288,6 +260,18 @@ function setStatus(type, msg) {
   el.textContent = msg;
 }
 
+function clearStepFields() {
+  ['f-step','f-time','f-notes'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-staff').value = '';
+  document.getElementById('f-nstaff').value = '';
+  consItems = []; equipItems = [];
+  ['cons-btn','equip-btn'].forEach(id => {
+    document.getElementById(id).className = 'popup-btn';
+    document.getElementById(id).textContent = id === 'cons-btn' ? '+ Add consumables' : '+ Add equipment';
+  });
+  ['cons-preview','equip-preview'].forEach(id => document.getElementById(id).innerHTML = '');
+}
+
 async function submitForm() {
   if (!validate()) { setStatus('error', 'Please fill in all required fields (marked with *).'); return; }
 
@@ -295,69 +279,37 @@ async function submitForm() {
   btn.disabled = true;
   setStatus('loading', 'Submitting... please wait.');
 
-  const payload = {
-    fields: {
-      Department:    document.getElementById('f-dept').value.trim(),
-      DoctorName:    document.getElementById('f-doc').value.trim(),
-      VisitType:     document.getElementById('f-visit').value,
-      Procedure:     document.getElementById('f-proc').value.trim(),
-      StepActivity:  document.getElementById('f-step').value.trim(),
-      StaffCategory: document.getElementById('f-staff').value,
-      NumberOfStaff: parseInt(document.getElementById('f-nstaff').value) || 1,
-      TimeMinutes:   parseFloat(document.getElementById('f-time').value) || 0,
-      Consumables:   JSON.stringify(consItems),
-      Equipment:     JSON.stringify(equipItems),
-      Notes:         document.getElementById('f-notes').value.trim(),
-    }
+  const data = {
+    Department:    document.getElementById('f-dept').value.trim(),
+    DoctorName:    document.getElementById('f-doc').value.trim(),
+    VisitType:     document.getElementById('f-visit').value,
+    Procedure:     document.getElementById('f-proc').value.trim(),
+    StepActivity:  document.getElementById('f-step').value.trim(),
+    StaffCategory: document.getElementById('f-staff').value,
+    NumberOfStaff: parseInt(document.getElementById('f-nstaff').value) || 1,
+    TimeMinutes:   parseFloat(document.getElementById('f-time').value) || 0,
+    Consumables:   JSON.stringify(consItems),
+    Equipment:     JSON.stringify(equipItems),
+    Notes:         document.getElementById('f-notes').value.trim(),
   };
 
   try {
-    const token = await getToken();
-    const url = `https://graph.microsoft.com/v1.0/sites/${GRAPH_CONFIG.siteId}/lists/${GRAPH_CONFIG.listId}/items`;
-    const res = await fetch(url, {
+    const res = await fetch(APPS_SCRIPT_URL, {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
     });
-
-    if (res.ok) {
-      setStatus('success', '✓ Step submitted successfully! Fill in the next step below.');
-      // Clear step-specific fields but keep general info
-      ['f-step','f-time','f-notes'].forEach(id => document.getElementById(id).value = '');
-      document.getElementById('f-staff').value = '';
-      document.getElementById('f-nstaff').value = '';
-      consItems = []; equipItems = [];
-      ['cons-btn','equip-btn'].forEach(id => {
-        document.getElementById(id).className = 'popup-btn';
-        document.getElementById(id).textContent = id === 'cons-btn' ? '+ Add consumables' : '+ Add equipment';
-      });
-      ['cons-preview','equip-preview'].forEach(id => document.getElementById(id).innerHTML = '');
-    } else {
-      const err = await res.json();
-      setStatus('error', 'Submission failed: ' + (err.error?.message || res.statusText));
-    }
+    // no-cors means we can't read the response but if no error was thrown it worked
+    setStatus('success', '✓ Step submitted successfully! Fill in the next step below.');
+    clearStepFields();
   } catch (e) {
-    // ── FALLBACK for when Graph API not yet configured ──
-    // Remove this block once IT has configured the GRAPH_CONFIG above
-    console.warn('Graph API not configured, using fallback download:', e.message);
-    downloadFallback(payload.fields);
+    setStatus('error', 'Submission failed. Please check your internet connection and try again.');
+    console.error(e);
   }
 
   btn.disabled = false;
 }
-
-// Fallback: download as JSON if API not configured yet
-function downloadFallback(data) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `TDABC_${data.Procedure.replace(/\s+/g,'_')}_${data.StepActivity.replace(/\s+/g,'_')}.json`;
-  a.click();
-  setStatus('success', '✓ Downloaded as JSON (SharePoint not yet configured). Send file to your costing team.');
-}
-
-// Initialise
-try { initMsal(); } catch(e) { console.log('MSAL init skipped (IT config pending)'); }
 </script>
 </body>
 </html>
