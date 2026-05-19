@@ -168,8 +168,8 @@ body{font-family:Arial,sans-serif;font-size:14px;color:#1a1a1a;background:#f4f6f
 const GRAPH_CONFIG = {
   clientId: 'b4422db5-2b43-4f69-8a27-3bd1d4d1f85e', // Azure App Registration client ID
   tenantId: '0656307e-3ae2-447b-8f4c-0a286915f5c0', // Azure AD tenant ID
-  siteId:   'YOUR_SHAREPOINT_SITE_ID',               // SharePoint site ID — add after deployment
-  listId:   'YOUR_LIST_ID',                          // TDABC_Responses list ID — add after deployment
+  siteId:   '0f7fe628-f247-4c60-9af0-b01eb39149e4', // SharePoint site ID
+  listId:   'e4f67273-af24-4e72-96e1-35a6828aa875',  // TDABC_Responses list ID
 };
 // ─────────────────────────────────────────────
 
@@ -183,7 +183,7 @@ function initMsal() {
     auth: {
       clientId: GRAPH_CONFIG.clientId,
       authority: `https://login.microsoftonline.com/${GRAPH_CONFIG.tenantId}`,
-      redirectUri: window.location.href.split('?')[0],
+      redirectUri: 'https://dedolapo13.github.io/tdabc-form/',
     },
     cache: { cacheLocation: 'sessionStorage' }
   });
