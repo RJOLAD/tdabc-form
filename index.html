@@ -380,7 +380,12 @@ async function submitForm() {
     StepActivity:  document.getElementById('f-step').value.trim(),
     StaffCategory: (function(){
       var sel = document.getElementById('f-staff').value;
-      return sel === 'Other — please specify below' ? document.getElementById('f-staff-other').value.trim() : sel;
+      if (sel === 'Other — please specify below') {
+        // Convert to Title Case regardless of how they typed it
+        return document.getElementById('f-staff-other').value.trim()
+          .toLowerCase().replace(/\b\w/g, function(l){ return l.toUpperCase(); });
+      }
+      return sel;
     })(),
     NumberOfStaff: parseInt(document.getElementById('f-nstaff').value) || 1,
     TimeMinutes:   parseFloat(document.getElementById('f-time').value) || 0,
